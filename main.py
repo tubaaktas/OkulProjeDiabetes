@@ -158,7 +158,6 @@ def replace_with_thresholds(dataframe, variable):
   dataframe.loc[(dataframe[variable] < low_limit), variable] = low_limit
   dataframe.loc[(dataframe[variable] > up_limit), variable] = up_limit
 
-
 #şimdi kalan aykırı değerlerin değişimini sağlayabiliriz.
 for col in num_cols:
   print(replace_with_thresholds(data, col))
