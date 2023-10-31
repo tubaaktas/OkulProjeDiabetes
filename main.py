@@ -190,3 +190,4 @@ data.loc[data['OUTCOME'] == 0] = data.loc[data['OUTCOME'] == 0].fillna(median_va
 data.isnull().sum()
 
 
+
