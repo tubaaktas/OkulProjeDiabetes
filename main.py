@@ -52,7 +52,7 @@ sns.clustermap(data.corr(), annot = True, fmt = ".2f")
 #plt.show()
 
 
-#Degiskenleri kategorik, kardinal ve kategorik olarak ayırıyoruz.
+#Degiskenleri kategorik, kardinal ve nümerik olarak ayırıyoruz.
 # Kardinal Degisken : kategorik degiskenin 20den fazla (buna biz karar veriyoruz 5 da  yazabilirdik.) sınıfı varsa kategorik gibi gorunen degiskenlerdir.
 """
 Kardinal değişkenler, sayılarla ifade edilebilen ve belirli bir sıralamaya sahip olmayan değişkenlerdir. 
@@ -162,6 +162,11 @@ def replace_with_thresholds(dataframe, variable):
 for col in num_cols:
   print(replace_with_thresholds(data, col))
 
+plt.hist(data, bins=10, edgecolor='black')  # 'bins' parametresiyle aralık sayısını belirleyebilirsiniz
+plt.xlabel('Değer Aralığı')
+plt.ylabel('Frekans')
+plt.title('Veri Seti Histogramı')
+plt.show()
 
 #Baskılama işlemi uyguladık şimdi tekrardan boş değerlerimizi kontrol edip, ortalama ile dolduralım.
 data.isnull().sum()
@@ -173,11 +178,15 @@ INSULIN          374
 BMI               11
 """
 
-#şimdi For döngüsü ile doldurulacak değişkenler içinde gezip,
-# Outcome değeri 0 olan değerlerin ortalamasını Outcome değeri 0 olan boş değerlere;
-# Outcome değeri 1 olan değerlerin ortalamasını Outcome değeri 1 olan boş değerlere atadım.
-for i in nan_col:
-    data[i][(data[i].isnull()) & (data["OUTCOME"] == 0)] = data[i][(data[i].isnull()) & (data["OUTCOME"] == 0)].fillna(data[i][data["OUTCOME"] == 0].mean())
-    data[i][(data[i].isnull()) & (data["OUTCOME"] == 1)] = data[i][(data[i].isnull()) & (data["OUTCOME"] == 1)].fillna(data[i][data["OUTCOME"] == 1].mean())
+
+# "Outcome" değeri 1 olan gözlemler için medyan değer hesaplama
+median_value_outcome_1 = data.loc[data['OUTCOME'] == 1].median()
+# "Outcome" değeri 0 olan gözlemler için medyan değer hesaplama
+median_value_outcome_0 = data.loc[data['OUTCOME'] == 0].median()
+# Boş değerleri doldurma
+data.loc[data['OUTCOME'] == 1] = data.loc[data['OUTCOME'] == 1].fillna(median_value_outcome_1)
+data.loc[data['OUTCOME'] == 0] = data.loc[data['OUTCOME'] == 0].fillna(median_value_outcome_0)
 
 data.isnull().sum()
+
+
