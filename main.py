@@ -189,5 +189,53 @@ data.loc[data['OUTCOME'] == 0] = data.loc[data['OUTCOME'] == 0].fillna(median_va
 
 data.isnull().sum()
 
+#FEATURE ENGINEERING
+
+# Yaş değişkenini kategorilere ayırıp yeni yaş değişkeni oluşturulması
+data.loc[(data["AGE"] >= 21) & (data["AGE"] < 50), "NEW_AGE_CAT"] = "mature"
+data.loc[(data["AGE"] >= 50), "NEW_AGE_CAT"] = "senior"
+
+# BMI 18,5 aşağısı underweight, 18.5 ile 24.9 arası normal, 24.9 ile 29.9 arası Overweight ve 30 üstü obez
+data['NEW_BMI'] = pd.cut(x=data['BMI'], bins=[0, 18.5, 24.9, 29.9, 100],labels=["Underweight", "Healthy", "Overweight", "Obese"])
+
+# Glukoz degerini kategorik değişkene çevirme
+data["NEW_GLUCOSE"] = pd.cut(x=data["GLUCOSE"], bins=[0, 140, 200, 300], labels=["Normal", "Prediabetes", "Diabetes"])
+
+# # Yaş ve beden kitle indeksini bir arada düşünerek kategorik değişken oluşturma 3 kırılım yakalandı
+data.loc[(data["BMI"] < 18.5) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_BMI_NOM"] = "underweightmature"
+data.loc[(data["BMI"] < 18.5) & (data["AGE"] >= 50), "NEW_AGE_BMI_NOM"] = "underweightsenior"
+data.loc[((data["BMI"] >= 18.5) & (data["BMI"] < 25)) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_BMI_NOM"] = "healthymature"
+data.loc[((data["BMI"] >= 18.5) & (data["BMI"] < 25)) & (data["AGE"] >= 50), "NEW_AGE_BMI_NOM"] = "healthysenior"
+data.loc[((data["BMI"] >= 25) & (data["BMI"] < 30)) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_BMI_NOM"] = "overweightmature"
+data.loc[((data["BMI"] >= 25) & (data["BMI"] < 30)) & (data["AGE"] >= 50), "NEW_AGE_BMI_NOM"] = "overweightsenior"
+data.loc[(data["BMI"] > 18.5) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_BMI_NOM"] = "obesemature"
+data.loc[(data["BMI"] > 18.5) & (data["AGE"] >= 50), "NEW_AGE_BMI_NOM"] = "obesesenior"
 
 
+# Yaş ve Glikoz değerlerini bir arada düşünerek kategorik değişken oluşturma
+data.loc[(data["GLUCOSE"] < 70) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_GLUCOSE_NOM"] = "lowmature"
+data.loc[(data["GLUCOSE"] < 70) & (data["AGE"] >= 50), "NEW_AGE_GLUCOSE_NOM"] = "lowsenior"
+data.loc[((data["GLUCOSE"] >= 70) & (data["GLUCOSE"] < 100)) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_GLUCOSE_NOM"] = "normalmature"
+data.loc[((data["GLUCOSE"] >= 70) & (data["GLUCOSE"] < 100)) & (data["AGE"] >= 50), "NEW_AGE_GLUCOSE_NOM"] = "normalsenior"
+data.loc[((data["GLUCOSE"] >= 100) & (data["GLUCOSE"] <= 125)) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_GLUCOSE_NOM"] = "hiddenmature"
+data.loc[((data["GLUCOSE"] >= 100) & (data["GLUCOSE"] <= 125)) & (data["AGE"] >= 50), "NEW_AGE_GLUCOSE_NOM"] = "hiddensenior"
+data.loc[(data["GLUCOSE"] > 125) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_GLUCOSE_NOM"] = "highmature"
+data.loc[(data["GLUCOSE"] > 125) & (data["AGE"] >= 50), "NEW_AGE_GLUCOSE_NOM"] = "highsenior"
+
+
+# İnsulin Değeri ile Kategorik değişken türetmek
+def set_insulin(dataframe, col_name="INSULIN"):
+    if 16 <= dataframe[col_name] <= 166:
+        return "Normal"
+    else:
+        return "Abnormal"
+
+data["NEW_INSULIN_SCORE"] = data.apply(set_insulin, axis=1)
+
+data["NEW_GLUCOSE*INSULIN"] = data["GLUCOSE"] * data["INSULIN"]
+
+# sıfır olan değerler dikkat!!!!
+data["NEW_GLUCOSE*PREGNANCIES"] = data["GLUCOSE"] * data["PREGNANCIES"]
+#df["NEW_GLUCOSE*PREGNANCIES"] = df["GLUCOSE"] * (1+ df["PREGNANCIES"])
+
+data.head()
