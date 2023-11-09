@@ -31,7 +31,8 @@ def check_df(dataframe, head=8):
   print(dataframe.describe([0,0.05, 0.50, 0.95, 0.99, 1]).T)
 
 check_df(data)
-data.info()
+data.head()
+
 
 # Kolon isimlerini büyültüyorum ki sorgulama vs yaparken yazmak, okumak kolay olsun.
 data.columns = [col.upper() for col in data.columns]
@@ -40,7 +41,7 @@ data.head()
 #Outlier değerleri grafik üzerinde görebilmek için
 f, ax = plt.subplots(figsize=(20,20)) #f->figure and ax->axis
 fig = sns.boxplot(data=data, orient="h") #horizontally (grafiği yatayda alabilmek için)
-#plt.show()
+plt.show()
 
 
 #Korelasyon analizi için
@@ -105,7 +106,7 @@ Numeric but Categoric: 1
 #Boş kısımları ortalama ile doldurma işlemini bu kısımda değil, outlier değerleri baskıladıktan sonra yapma kararı aldım.
 #0 değerlerini NaN olarak değiştirelim.
 nan_col=['GLUCOSE','BLOODPRESSURE','SKINTHICKNESS', 'INSULIN', 'BMI']
-data[nan_col]=data[nan_col].replace(0 ,np.NaN)
+data[nan_col]=data[nan_col].replace(0, np.NaN)
 #kaç boş değer olduğunu gördük ki deri kalınlığı ve insülin değerinde fazlasıyla boş değer var.
 data.isnull().sum()
 
@@ -190,7 +191,6 @@ data.loc[data['OUTCOME'] == 0] = data.loc[data['OUTCOME'] == 0].fillna(median_va
 data.isnull().sum()
 
 #FEATURE ENGINEERING
-
 # Yaş değişkenini kategorilere ayırıp yeni yaş değişkeni oluşturulması
 data.loc[(data["AGE"] >= 21) & (data["AGE"] < 50), "NEW_AGE_CAT"] = "mature"
 data.loc[(data["AGE"] >= 50), "NEW_AGE_CAT"] = "senior"
