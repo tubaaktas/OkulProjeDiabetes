@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import warnings
 warnings.simplefilter(action="ignore")
 
-
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.float_format', lambda x: '%.3f' % x)
@@ -31,8 +30,6 @@ def check_df(dataframe, head=8):
   print(dataframe.describe([0,0.05, 0.50, 0.95, 0.99, 1]).T)
 
 check_df(data)
-data.head()
-
 
 # Kolon isimlerini büyültüyorum ki sorgulama vs yaparken yazmak, okumak kolay olsun.
 data.columns = [col.upper() for col in data.columns]
@@ -41,7 +38,7 @@ data.head()
 #Outlier değerleri grafik üzerinde görebilmek için
 f, ax = plt.subplots(figsize=(20,20)) #f->figure and ax->axis
 fig = sns.boxplot(data=data, orient="h") #horizontally (grafiği yatayda alabilmek için)
-plt.show()
+#plt.show()
 
 
 #Korelasyon analizi için
@@ -66,15 +63,15 @@ Bu veri setindeki her bir sayı, bir katılımcının yaşı olarak temsil edili
 Bu veri seti, kardinal bir değişkeni gösterir çünkü her bir değer sayısal olarak ifade edilebilir ve bu değerler arasında bir sıralama mevcuttur.
 """
 def grab_col_names(dataframe, cat_th=10,
-                   car_th=5):  # essiz deger sayisi 10dan kucukse kategorik degisken, 5 den buyukse de kardinal degisken gibi dusunucez.
+                   car_th=20):  # essiz deger sayisi 10dan kucukse kategorik degisken, 5 den buyukse de kardinal degisken gibi dusunucez.
   # Veri setimiz küçük olduğundan ben 5 ile sınırlandırdım.
   cat_cols = [col for col in dataframe.columns if str(dataframe[col].dtypes) in ["category", "object", "bool"]]
 
   num_but_cat = [col for col in dataframe.columns if
-                 dataframe[col].nunique() < 10 and dataframe[col].dtypes in ["int", "float"]]
+                 dataframe[col].nunique() < cat_th and dataframe[col].dtypes in ["int", "float"]]
 
   cat_but_car = [col for col in dataframe.columns if
-                 dataframe[col].nunique() > 20 and str(dataframe[col].dtypes) in ["category", "object"]]
+                 dataframe[col].nunique() > car_th and str(dataframe[col].dtypes) in ["category", "object"]]
 
   cat_cols = num_but_cat + cat_cols
   cat_cols = [col for col in cat_cols if col not in cat_but_car]
@@ -92,6 +89,7 @@ def grab_col_names(dataframe, cat_th=10,
   return cat_cols, num_cols, cat_but_car
 
 cat_cols, num_cols, cat_but_car = grab_col_names(data)
+
 """
 Observations: 768
 Variables: 9
@@ -103,15 +101,58 @@ Numeric but Categoric: 1
 #Çıktıda aldığımız değerlere göre kardinal bir değişkenimiz bulunmamakta, 1 kategorik, 8 numerik, 1 tane de numerik ama kategorik (OUTCOME) değerimiz bulunmakta.
 """
 
-#Boş kısımları ortalama ile doldurma işlemini bu kısımda değil, outlier değerleri baskıladıktan sonra yapma kararı aldım.
+
+#numerik değiskenler ve target analizi
+def target_summary_with_num(dataframe, target, numerical_col):
+    print(dataframe.groupby(target).agg({numerical_col: "mean"}), end="\n\n\n")
+
+for col in num_cols:
+    target_summary_with_num(data, "OUTCOME", col)
+
+#nümerik değişken analizi
+def num_summary(dataframe, numerical_col, plot=False):
+    quantiles = [0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.95, 0.99]
+    print(dataframe[numerical_col].describe(quantiles).T)
+
+    if plot:
+        dataframe[numerical_col].hist(bins=20)
+        plt.xlabel(numerical_col)
+        plt.title(numerical_col)
+        plt.show()
+
+for col in num_cols:
+    num_summary(data, col, plot=True)
+
+#kategorik degisken analizi yani sadece outcome
+def cat_summary(dataframe, col_name, plot=False):
+    print(pd.DataFrame({col_name: dataframe[col_name].value_counts(),
+                        "Ratio": 100 * dataframe[col_name].value_counts() / len(dataframe)}))
+    print("##########################################")
+    if plot:
+        sns.countplot(x=dataframe[col_name], data=dataframe)
+        plt.show()
+
+cat_summary(data, "OUTCOME")
+
 #0 değerlerini NaN olarak değiştirelim.
 nan_col=['GLUCOSE','BLOODPRESSURE','SKINTHICKNESS', 'INSULIN', 'BMI']
 data[nan_col]=data[nan_col].replace(0, np.NaN)
 #kaç boş değer olduğunu gördük ki deri kalınlığı ve insülin değerinde fazlasıyla boş değer var.
 data.isnull().sum()
 
+
+# "Outcome" değeri 1 olan gözlemler için medyan değer hesaplama
+median_value_outcome_1 = data.loc[data['OUTCOME'] == 1].median()
+# "Outcome" değeri 0 olan gözlemler için medyan değer hesaplama
+median_value_outcome_0 = data.loc[data['OUTCOME'] == 0].median()
+# Boş değerleri doldurma
+data.loc[data['OUTCOME'] == 1] = data.loc[data['OUTCOME'] == 1].fillna(median_value_outcome_1)
+data.loc[data['OUTCOME'] == 0] = data.loc[data['OUTCOME'] == 0].fillna(median_value_outcome_0)
+
+data.isnull().sum()
+
 #Aykırı değerimizi (Outlier) saptama işlemi için:
-def outlier_thresholds(dataframe, col_name, q1 = 0.15, q3 = 0.85):
+def outlier_thresholds(dataframe, col_name, q1 = 0.25, q3 = 0.75):
   quantile1 = dataframe[col_name].quantile(q1)
   quantile3 = dataframe[col_name].quantile(q3)
   interquantile_range = quantile3 - quantile1
@@ -163,33 +204,15 @@ def replace_with_thresholds(dataframe, variable):
 for col in num_cols:
   print(replace_with_thresholds(data, col))
 
+
 plt.hist(data, bins=10, edgecolor='black')  # 'bins' parametresiyle aralık sayısını belirleyebilirsiniz
 plt.xlabel('Değer Aralığı')
 plt.ylabel('Frekans')
 plt.title('Veri Seti Histogramı')
 plt.show()
 
-#Baskılama işlemi uyguladık şimdi tekrardan boş değerlerimizi kontrol edip, ortalama ile dolduralım.
-data.isnull().sum()
-"""
-GLUCOSE            5
-BLOODPRESSURE     35
-SKINTHICKNESS    227
-INSULIN          374
-BMI               11
-"""
 
-
-# "Outcome" değeri 1 olan gözlemler için medyan değer hesaplama
-median_value_outcome_1 = data.loc[data['OUTCOME'] == 1].median()
-# "Outcome" değeri 0 olan gözlemler için medyan değer hesaplama
-median_value_outcome_0 = data.loc[data['OUTCOME'] == 0].median()
-# Boş değerleri doldurma
-data.loc[data['OUTCOME'] == 1] = data.loc[data['OUTCOME'] == 1].fillna(median_value_outcome_1)
-data.loc[data['OUTCOME'] == 0] = data.loc[data['OUTCOME'] == 0].fillna(median_value_outcome_0)
-
-data.isnull().sum()
-
+'''
 #FEATURE ENGINEERING
 # Yaş değişkenini kategorilere ayırıp yeni yaş değişkeni oluşturulması
 data.loc[(data["AGE"] >= 21) & (data["AGE"] < 50), "NEW_AGE_CAT"] = "mature"
@@ -239,3 +262,4 @@ data["NEW_GLUCOSE*PREGNANCIES"] = data["GLUCOSE"] * data["PREGNANCIES"]
 #df["NEW_GLUCOSE*PREGNANCIES"] = df["GLUCOSE"] * (1+ df["PREGNANCIES"])
 
 data.head()
+'''
