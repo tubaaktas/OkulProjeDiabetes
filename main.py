@@ -101,7 +101,6 @@ Numeric but Categoric: 1
 #Çıktıda aldığımız değerlere göre kardinal bir değişkenimiz bulunmamakta, 1 kategorik, 8 numerik, 1 tane de numerik ama kategorik (OUTCOME) değerimiz bulunmakta.
 """
 
-
 #numerik değiskenler ve target analizi
 def target_summary_with_num(dataframe, target, numerical_col):
     print(dataframe.groupby(target).agg({numerical_col: "mean"}), end="\n\n\n")
