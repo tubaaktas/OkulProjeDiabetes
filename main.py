@@ -1,8 +1,20 @@
+import joblib
 import pandas as pd
-import numpy as np
 import seaborn as sns
-import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib import pyplot as plt
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier, AdaBoostClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_predict, GridSearchCV, cross_val_score
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.preprocessing import StandardScaler
+from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
+from catboost import CatBoostClassifier
 import warnings
+
 warnings.simplefilter(action="ignore")
 
 pd.set_option('display.max_columns', None)
@@ -10,9 +22,12 @@ pd.set_option('display.max_rows', None)
 pd.set_option('display.float_format', lambda x: '%.3f' % x)
 pd.set_option('display.width', 500)
 
-data = pd.read_csv('../OkulProje/database/diabetes.csv')
+data = pd.read_csv("database/diabetes.csv")
 
-#Burada diabetes veri setini checkup ediyoruz.
+# Kolon isimlerini büyültüyorum ki sorgulama vs yaparken yazmak, okumak kolay olsun.
+data.columns = [col.upper() for col in data.columns]
+data.head()
+
 def check_df(dataframe, head=8):
   print("##### Shape #####") #kac kolon kac satir
   print(dataframe.shape)
@@ -29,11 +44,8 @@ def check_df(dataframe, head=8):
   # Mesela glucose degeri min olarak 0 gosterilmis, glucose 0 olamaz. Demek ki null kısımlara 0 girilmis.
   print(dataframe.describe([0,0.05, 0.50, 0.95, 0.99, 1]).T)
 
-check_df(data)
 
-# Kolon isimlerini büyültüyorum ki sorgulama vs yaparken yazmak, okumak kolay olsun.
-data.columns = [col.upper() for col in data.columns]
-data.head()
+#check_df(data)
 
 #Outlier değerleri grafik üzerinde görebilmek için
 f, ax = plt.subplots(figsize=(20,20)) #f->figure and ax->axis
@@ -49,6 +61,45 @@ fig = sns.boxplot(data=data, orient="h") #horizontally (grafiği yatayda alabilm
 sns.clustermap(data.corr(), annot = True, fmt = ".2f")
 #plt.show()
 
+# BASE MODEL KURULUMU
+
+def base_models(X, y):
+    print("Base Models....")
+    classifiers = [('LR', LogisticRegression()),
+                   ('KNN', KNeighborsClassifier()),
+                   #("SVC", SVC()),
+                   ("CART", DecisionTreeClassifier()),
+                   ("RF", RandomForestClassifier()),
+                   ('Adaboost', AdaBoostClassifier()),
+                   ('GBM', GradientBoostingClassifier()),
+                   ('XGBoost', XGBClassifier(use_label_encoder=False, eval_metric='logloss')),
+                   #('LightGBM', LGBMClassifier()),
+                   # ('CatBoost', CatBoostClassifier(verbose=False))
+                   ]
+
+    for name, classifier in classifiers:
+        print(name)
+        for score in ["roc_auc", "f1", "precision", "recall", "accuracy"]:
+            cv_results = cross_val_score(classifier, X, y, cv=5, scoring=score).mean()
+            print(score + " score:" + str(cv_results))
+        print("\n")
+
+
+y = data["OUTCOME"]
+X = data.drop("OUTCOME", axis=1)
+base_models(X, y)
+
+def plot_importance(model, features, num=len(X), save=True):
+    feature_imp = pd.DataFrame({'Value': model.feature_importances_, 'Feature': features.columns})
+    plt.figure(figsize=(10, 10))
+    sns.set(font_scale=1)
+    sns.barplot(x="Value", y="Feature", data=feature_imp.sort_values(by="Value",
+                                                                     ascending=False)[0:num])
+    plt.title('Features')
+    plt.tight_layout()
+    #plt.show()
+    if save:
+        plt.savefig('importances.png')
 
 #Degiskenleri kategorik, kardinal ve nümerik olarak ayırıyoruz.
 # Kardinal Degisken : kategorik degiskenin 20den fazla (buna biz karar veriyoruz 5 da  yazabilirdik.) sınıfı varsa kategorik gibi gorunen degiskenlerdir.
@@ -120,7 +171,7 @@ def num_summary(dataframe, numerical_col, plot=False):
         plt.show()
 
 for col in num_cols:
-    num_summary(data, col, plot=True)
+    num_summary(data, col, plot=False)
 
 #kategorik degisken analizi yani sadece outcome
 def cat_summary(dataframe, col_name, plot=False):
@@ -210,55 +261,93 @@ plt.ylabel('Frekans')
 plt.title('Veri Seti Histogramı')
 plt.show()
 
+#data["AGE"].min()
 
-'''
 #FEATURE ENGINEERING
 # Yaş değişkenini kategorilere ayırıp yeni yaş değişkeni oluşturulması
-data.loc[(data["AGE"] >= 21) & (data["AGE"] < 50), "NEW_AGE_CAT"] = "mature"
-data.loc[(data["AGE"] >= 50), "NEW_AGE_CAT"] = "senior"
+data.loc[(data['AGE'] < 35), "NEW_AGE_CAT"] = 'young'
+data.loc[(data['AGE'] >= 35) & (data['AGE'] <= 55), "NEW_AGE_CAT"] = 'middleage'
+data.loc[(data['AGE'] > 55), "NEW_AGE_CAT"] = 'old'
 
 # BMI 18,5 aşağısı underweight, 18.5 ile 24.9 arası normal, 24.9 ile 29.9 arası Overweight ve 30 üstü obez
-data['NEW_BMI'] = pd.cut(x=data['BMI'], bins=[0, 18.5, 24.9, 29.9, 100],labels=["Underweight", "Healthy", "Overweight", "Obese"])
+data['NEW_BMI'] = pd.cut(x=data['BMI'], bins=[0, 18.5, 24.9, 29.9, 100],
+                         labels=["Underweight", "Healthy", "Overweight", "Obese"])
 
 # Glukoz degerini kategorik değişkene çevirme
-data["NEW_GLUCOSE"] = pd.cut(x=data["GLUCOSE"], bins=[0, 140, 200, 300], labels=["Normal", "Prediabetes", "Diabetes"])
+data["NEW_GLUCOSE"] = pd.cut(x=data["GLUCOSE"], bins=[0, 140, 200, 300],
+                             labels=["Normal", "Prediabetes", "Diabetes"])
 
-# # Yaş ve beden kitle indeksini bir arada düşünerek kategorik değişken oluşturma 3 kırılım yakalandı
-data.loc[(data["BMI"] < 18.5) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_BMI_NOM"] = "underweightmature"
-data.loc[(data["BMI"] < 18.5) & (data["AGE"] >= 50), "NEW_AGE_BMI_NOM"] = "underweightsenior"
-data.loc[((data["BMI"] >= 18.5) & (data["BMI"] < 25)) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_BMI_NOM"] = "healthymature"
-data.loc[((data["BMI"] >= 18.5) & (data["BMI"] < 25)) & (data["AGE"] >= 50), "NEW_AGE_BMI_NOM"] = "healthysenior"
-data.loc[((data["BMI"] >= 25) & (data["BMI"] < 30)) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_BMI_NOM"] = "overweightmature"
-data.loc[((data["BMI"] >= 25) & (data["BMI"] < 30)) & (data["AGE"] >= 50), "NEW_AGE_BMI_NOM"] = "overweightsenior"
-data.loc[(data["BMI"] > 18.5) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_BMI_NOM"] = "obesemature"
-data.loc[(data["BMI"] > 18.5) & (data["AGE"] >= 50), "NEW_AGE_BMI_NOM"] = "obesesenior"
+# BloodPressure
+data['NEW_BLOODPRESSURE'] = pd.cut(x=data['BLOODPRESSURE'], bins=[0, 79, 89, 123],
+                                   labels=["normal", "hs1", "hs2"])
 
+# Insulin
+data['NEW_INSULIN'] = data['INSULIN'].apply(lambda x: "Normal" if 16 <= x <= 166 else "Abnormal")
 
-# Yaş ve Glikoz değerlerini bir arada düşünerek kategorik değişken oluşturma
-data.loc[(data["GLUCOSE"] < 70) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_GLUCOSE_NOM"] = "lowmature"
-data.loc[(data["GLUCOSE"] < 70) & (data["AGE"] >= 50), "NEW_AGE_GLUCOSE_NOM"] = "lowsenior"
-data.loc[((data["GLUCOSE"] >= 70) & (data["GLUCOSE"] < 100)) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_GLUCOSE_NOM"] = "normalmature"
-data.loc[((data["GLUCOSE"] >= 70) & (data["GLUCOSE"] < 100)) & (data["AGE"] >= 50), "NEW_AGE_GLUCOSE_NOM"] = "normalsenior"
-data.loc[((data["GLUCOSE"] >= 100) & (data["GLUCOSE"] <= 125)) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_GLUCOSE_NOM"] = "hiddenmature"
-data.loc[((data["GLUCOSE"] >= 100) & (data["GLUCOSE"] <= 125)) & (data["AGE"] >= 50), "NEW_AGE_GLUCOSE_NOM"] = "hiddensenior"
-data.loc[(data["GLUCOSE"] > 125) & ((data["AGE"] >= 21) & (data["AGE"] < 50)), "NEW_AGE_GLUCOSE_NOM"] = "highmature"
-data.loc[(data["GLUCOSE"] > 125) & (data["AGE"] >= 50), "NEW_AGE_GLUCOSE_NOM"] = "highsenior"
-
-
-# İnsulin Değeri ile Kategorik değişken türetmek
-def set_insulin(dataframe, col_name="INSULIN"):
-    if 16 <= dataframe[col_name] <= 166:
-        return "Normal"
-    else:
-        return "Abnormal"
-
-data["NEW_INSULIN_SCORE"] = data.apply(set_insulin, axis=1)
-
-data["NEW_GLUCOSE*INSULIN"] = data["GLUCOSE"] * data["INSULIN"]
-
-# sıfır olan değerler dikkat!!!!
-data["NEW_GLUCOSE*PREGNANCIES"] = data["GLUCOSE"] * data["PREGNANCIES"]
-#df["NEW_GLUCOSE*PREGNANCIES"] = df["GLUCOSE"] * (1+ df["PREGNANCIES"])
+data["INSULIN"].min()
+data["INSULIN"].max()
 
 data.head()
+
 '''
+# # Yaş ve beden kitle indeksini bir arada düşünerek kategorik değişken oluşturma
+data.loc[(data["BMI"] < 18.5) & ((data['AGE'] >= 35) & (data['AGE'] <= 55)), "NEW_AGE_BMI_NOM"] = "underweight_middleage"
+
+# Yaş ve Glikoz değerlerini bir arada düşünerek kategorik değişken oluşturma
+data.loc[(data["GLUCOSE"] < 70) & ((data['AGE'] >= 35) & (data['AGE'] <= 55)), "NEW_AGE_GLUCOSE_NOM"] = "low_middleage"
+
+
+'''
+
+cat_cols, num_cols, cat_but_car=grab_col_names(data,cat_th=5, car_th=15)
+cat_cols = [col for col in cat_cols if "OUTCOME" not in col]
+num_cols
+
+#One Hot Encoder
+def one_hot_encoder(dataframe, categorical_cols, drop_first=False):
+    dataframe = pd.get_dummies(dataframe, columns=categorical_cols, drop_first=drop_first)
+    return dataframe
+
+data = one_hot_encoder(data,cat_cols, drop_first=True)
+
+data.columns = [col.upper() for col in data.columns]
+cat_cols, num_cols, cat_but_car = grab_col_names(data, cat_th=5, car_th=15)
+
+#Standart Scaler
+X_scaled = StandardScaler().fit_transform(data[num_cols])
+data[num_cols] = pd.DataFrame(X_scaled, columns=data[num_cols].columns)
+
+#data.head()
+y = data["OUTCOME"]
+X = data.drop(["OUTCOME"], axis=1)
+check_df(data)
+
+base_models(X, y)
+
+#Random Forest Model
+rf_model = RandomForestClassifier(random_state=46)
+
+rf_params = {
+    "n_estimators": [75, 150, 250],
+    "max_depth": [None, 5, 10, 15],
+    "min_samples_split": [2, 5, 10],
+    "min_samples_leaf": [1, 2, 5],
+    "max_features": ['auto', 'sqrt']
+}
+
+# GridSearchCV kullanarak en iyi parametreleri bulmak için
+rf_gs_best = GridSearchCV(rf_model,
+                          rf_params,
+                          cv=3,
+                          n_jobs=-1,
+                          verbose=True).fit(X, y)
+
+# En iyi parametrelerle final modeli oluşturmak için
+final_rf_model = rf_model.set_params(**rf_gs_best.best_params_).fit(X, y)
+
+random_user = X.sample(1, random_state=45)
+final_rf_model.predict(random_user)
+
+data.loc[195]
+
+plot_importance(final_rf_model, X, save=True)
