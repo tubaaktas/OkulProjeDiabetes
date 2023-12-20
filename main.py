@@ -5,12 +5,13 @@ import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier, AdaBoostClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import cross_val_predict, GridSearchCV, cross_val_score
+from sklearn.model_selection import cross_val_predict, GridSearchCV, cross_val_score, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
+from scikitplot.metrics import plot_roc_curve
 from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
 import warnings
@@ -61,13 +62,26 @@ fig = sns.boxplot(data=data, orient="h") #horizontally (grafiği yatayda alabilm
 sns.clustermap(data.corr(), annot = True, fmt = ".2f")
 #plt.show()
 
-# BASE MODEL KURULUMU
+#F1, ROC_AUC, ACCURACY VB GİBİ DEĞERLERİN GRAFİKLEŞTİRİLMESİ
 
+def plot_metric(metric, model_results):
+    models = list(model_results.keys())
+    values = [model_results[model][metric] for model in models]
+
+    plt.figure(figsize=(8, 6))
+    plt.bar(models, values)
+    plt.xlabel('Models')
+    plt.ylabel(metric)
+    plt.title(f'{metric} Comparison Among Models')
+    plt.ylim(0, 1)  # Performans metrikleri genellikle 0 ile 1 arasında olur
+    plt.show()
+
+# BASE MODEL KURULUMU
 def base_models(X, y):
     print("Base Models....")
     classifiers = [('LR', LogisticRegression()),
                    ('KNN', KNeighborsClassifier()),
-                   #("SVC", SVC()),
+                   ("SVC", SVC()),
                    ("CART", DecisionTreeClassifier()),
                    ("RF", RandomForestClassifier()),
                    ('Adaboost', AdaBoostClassifier()),
@@ -76,19 +90,40 @@ def base_models(X, y):
                    #('LightGBM', LGBMClassifier()),
                    # ('CatBoost', CatBoostClassifier(verbose=False))
                    ]
+    results = {}  # Performans ölçütlerini saklamak için bir sözlük
 
     for name, classifier in classifiers:
         print(name)
+        classifier_scores = {}
         for score in ["roc_auc", "f1", "precision", "recall", "accuracy"]:
             cv_results = cross_val_score(classifier, X, y, cv=5, scoring=score).mean()
             print(score + " score:" + str(cv_results))
+            classifier_scores[score] = cv_results
+
+        results[name] = classifier_scores
         print("\n")
 
+    return results
+
+def plot_roc_curves(models, X_test, y_test):
+    plt.figure(figsize=(10, 6))
+    for name, model in models.items():
+        plot_roc_curve(model, X_test, y_test, name=name)
+
+    plt.title('Receiver Operating Characteristic (ROC) Curves')
+    plt.legend()
+    plt.show()
 
 y = data["OUTCOME"]
 X = data.drop("OUTCOME", axis=1)
-base_models(X, y)
 
+model_results = base_models(X,y)
+
+# Her bir performans metriği için grafik oluşturma
+metrics = list(model_results[list(model_results.keys())[0]].keys())
+
+for metric in metrics:
+    plot_metric(metric, model_results)
 def plot_importance(model, features, num=len(X), save=True):
     feature_imp = pd.DataFrame({'Value': model.feature_importances_, 'Feature': features.columns})
     plt.figure(figsize=(10, 10))
@@ -264,6 +299,7 @@ plt.show()
 #data["AGE"].min()
 
 #FEATURE ENGINEERING
+"""
 # Yaş değişkenini kategorilere ayırıp yeni yaş değişkeni oluşturulması
 data.loc[(data['AGE'] < 35), "NEW_AGE_CAT"] = 'young'
 data.loc[(data['AGE'] >= 35) & (data['AGE'] <= 55), "NEW_AGE_CAT"] = 'middleage'
@@ -290,14 +326,82 @@ data["INSULIN"].max()
 data.head()
 
 '''
-# # Yaş ve beden kitle indeksini bir arada düşünerek kategorik değişken oluşturma
+# Yaş ve beden kitle indeksini bir arada düşünerek kategorik değişken oluşturma
 data.loc[(data["BMI"] < 18.5) & ((data['AGE'] >= 35) & (data['AGE'] <= 55)), "NEW_AGE_BMI_NOM"] = "underweight_middleage"
 
 # Yaş ve Glikoz değerlerini bir arada düşünerek kategorik değişken oluşturma
 data.loc[(data["GLUCOSE"] < 70) & ((data['AGE'] >= 35) & (data['AGE'] <= 55)), "NEW_AGE_GLUCOSE_NOM"] = "low_middleage"
-
-
 '''
+"""
+
+# Yaş değişkenini kategorilere ayırıp yeni yaş değişkeni oluşturulması
+data.loc[(data["AGE"] >= 18) & (data["AGE"] <= 32), "NEW_AGE_CAT"] = "Young"
+data.loc[(data["AGE"] >  32) & (data["AGE"] <  50), "NEW_AGE_CAT"] = "Adult"
+data.loc[(data["AGE"] >= 50), "NEW_AGE_CAT"] = "Mature"
+
+# BMI 18,5 aşağısı underweight, 18.5 ile 24.9 arası normal, 24.9 ile 29.9 arası Overweight ve 30 üstü obez
+data['NEW_BMI'] = pd.cut(x=data['BMI'], bins=[0, 18.5, 24.9, 29.9, 100],labels=["Underweight", "Healthy", "Overweight", "Obese"])
+
+# Glukoz degerini kategorik değişkene çevirme
+data["NEW_GLUCOSE"] = pd.cut(x=data["GLUCOSE"], bins=[0, 70, 140, 200, 300], labels=["Low", "Healthy", "Prediabetes", "Diabetes"])
+
+# Deri Kalinligi degerini kategorik degiskene cevirme mm turunden
+data["NEW_SKIN_THIC"] = pd.cut(x=data["SKINTHICKNESS"], bins=[1.25, 2, 2.5, 3.25], labels=["Thin", "Healthy", "Thick"])
+
+# # Yaş ve beden kitle indeksini bir arada düşünerek kategorik değişken oluşturma 3 kırılım yakalandı
+data.loc[(data["BMI"] < 18.5) & ((data["AGE"] >= 18) & (data["AGE"] <= 32)), "NEW_AGE_BMI_NOM"] = "UnderweightYoung"
+data.loc[(data["BMI"] < 18.5) & ((data["AGE"] > 32) & (data["AGE"] < 50)), "NEW_AGE_BMI_NOM"] = "UnderweightAdult"
+data.loc[(data["BMI"] < 18.5) & (data["AGE"] >= 50), "NEW_AGE_BMI_NOM"] = "UnderweightMature"
+data.loc[((data["BMI"] >= 18.5) & (data["BMI"] < 25)) & ((data["AGE"] >= 18) & (data["AGE"] <= 32)), "NEW_AGE_BMI_NOM"] = "HealthyYoung"
+data.loc[((data["BMI"] >= 18.5) & (data["BMI"] < 25)) & ((data["AGE"] > 32) & (data["AGE"] < 50)), "NEW_AGE_BMI_NOM"] = "HealthyAdult"
+data.loc[((data["BMI"] >= 18.5) & (data["BMI"] < 25)) & (data["AGE"] >= 50), "NEW_AGE_BMI_NOM"] = "HealthyMature"
+data.loc[((data["BMI"] >= 25) & (data["BMI"] < 30)) & ((data["AGE"] >= 18) & (data["AGE"] <= 32)), "NEW_AGE_BMI_NOM"] = "OverweightYoung"
+data.loc[((data["BMI"] >= 25) & (data["BMI"] < 30)) & ((data["AGE"] > 32) & (data["AGE"] < 50)), "NEW_AGE_BMI_NOM"] = "OverweightAdult"
+data.loc[((data["BMI"] >= 25) & (data["BMI"] < 30)) & (data["AGE"] >= 50), "NEW_AGE_BMI_NOM"] = "OverweightMature"
+data.loc[(data["BMI"] > 30) & ((data["AGE"] >= 18) & (data["AGE"] <= 32)), "NEW_AGE_BMI_NOM"] = "ObeseYoung"
+data.loc[(data["BMI"] > 30) & ((data["AGE"] > 32) & (data["AGE"] < 50)), "NEW_AGE_BMI_NOM"] = "ObeseAdult"
+data.loc[(data["BMI"] > 30) & (data["AGE"] >= 50), "NEW_AGE_BMI_NOM"] = "ObeseMature"
+
+# Yaş ve Glikoz değerlerini bir arada düşünerek kategorik değişken oluşturma
+data.loc[(data["GLUCOSE"] < 70) & ((data["AGE"] >= 18) & (data["AGE"] <= 32)), "NEW_AGE_GLUCOSE_NOM"] = "LowYoung"
+data.loc[(data["GLUCOSE"] < 70) & ((data["AGE"] > 32) & (data["AGE"] < 50)), "NEW_AGE_GLUCOSE_NOM"] = "LowAdult"
+data.loc[(data["GLUCOSE"] < 70) & (data["AGE"] >= 50), "NEW_AGE_GLUCOSE_NOM"] = "LowMature"
+data.loc[((data["GLUCOSE"] >= 70) & (data["GLUCOSE"] < 140)) & ((data["AGE"] >= 18) & (data["AGE"] <= 32)), "NEW_AGE_GLUCOSE_NOM"] = "HealthyYoung"
+data.loc[((data["GLUCOSE"] >= 70) & (data["GLUCOSE"] < 140)) & ((data["AGE"] > 32) & (data["AGE"] < 50)), "NEW_AGE_GLUCOSE_NOM"] = "HealthyAdult"
+data.loc[((data["GLUCOSE"] >= 70) & (data["GLUCOSE"] < 140)) & (data["AGE"] >= 50), "NEW_AGE_GLUCOSE_NOM"] = "HealthyMature"
+data.loc[((data["GLUCOSE"] >= 140) & (data["GLUCOSE"] <= 200)) & ((data["AGE"] >= 18) & (data["AGE"] <= 32)), "NEW_AGE_GLUCOSE_NOM"] = "PrediabetesYoung"
+data.loc[((data["GLUCOSE"] >= 140) & (data["GLUCOSE"] <= 200)) & ((data["AGE"] > 32) & (data["AGE"] < 50)), "NEW_AGE_GLUCOSE_NOM"] = "PrediabetesAdult"
+data.loc[((data["GLUCOSE"] >= 140) & (data["GLUCOSE"] <= 200)) & (data["AGE"] >= 50), "NEW_AGE_GLUCOSE_NOM"] = "PrediabetesMature"
+data.loc[(data["GLUCOSE"] > 200) & ((data["AGE"] >= 18) & (data["AGE"] <= 32)), "NEW_AGE_GLUCOSE_NOM"] = "DiabetesYoung"
+data.loc[(data["GLUCOSE"] > 200) & ((data["AGE"] > 32) & (data["AGE"] < 50)), "NEW_AGE_GLUCOSE_NOM"] = "DiabetesAdult"
+data.loc[(data["GLUCOSE"] > 200) & (data["AGE"] >= 50), "NEW_AGE_GLUCOSE_NOM"] = "DiabetesMature"
+
+# Deri Kalinligi ve Beden Kitle Indeksi degerlerini bir arada dusunerek kategorik degisken olusturma
+data.loc[(data["BMI"] < 18.5) & ((data["SKINTHICKNESS"] > 1.25) & (data["SKINTHICKNESS"] <= 2)), "NEW_BMI_SKIN_THIC_NOM"] = "UnderweightThin"
+data.loc[(data["BMI"] < 18.5) & ((data["SKINTHICKNESS"] > 2) & (data["SKINTHICKNESS"] <= 2.5)), "NEW_BMI_SKIN_THIC_NOM"] = "UnderweightHealthy"
+data.loc[(data["BMI"] < 18.5) & ((data["SKINTHICKNESS"] > 2.5) & (data["SKINTHICKNESS"] <= 3.25)), "NEW_BMI_SKIN_THIC_NOM"] = "UnderweightThick"
+data.loc[((data["BMI"] >= 18.5) & (data["BMI"] < 25)) & ((data["SKINTHICKNESS"] > 1.25) & (data["SKINTHICKNESS"] <= 2)), "NEW_BMI_SKIN_THIC_NOM"] = "HealthyThin"
+data.loc[((data["BMI"] >= 18.5) & (data["BMI"] < 25)) & ((data["SKINTHICKNESS"] > 2) & (data["SKINTHICKNESS"] <= 2.5)), "NEW_BMI_SKIN_THIC_NOM"] = "Healthy_Healthy"
+#data.loc[((data["BMI"] >= 18.5) % (data["BMI"] < 25)) & ((data["SKINTHICKNESS"] > 2 & (data["SKINTHICKNESS"] <= 2.5)), "NEW_BMI_SKIN_THIC_NOM"] = "Healthy_Healthy"
+data.loc[((data["BMI"] >= 18.5)) & (data["BMI"] < 25) & ((data["SKINTHICKNESS"] > 2.5) & (data["SKINTHICKNESS"] <= 3.25)), "NEW_BMI_SKIN_THIC_NOM"] = "HealthyThick"
+data.loc[((data["BMI"] >= 25) % (data["BMI"] < 30)) & ((data["SKINTHICKNESS"] > 1.25) & (data["SKINTHICKNESS"] <= 2)), "NEW_BMI_SKIN_THIC_NOM"] = "OverweightThin"
+data.loc[((data["BMI"] >= 25) % (data["BMI"] < 30)) & ((data["SKINTHICKNESS"] > 2) & (data["SKINTHICKNESS"] <= 2.5)), "NEW_BMI_SKIN_THIC_NOM"] = "OverweightHealthy"
+data.loc[((data["BMI"] >= 25) % (data["BMI"] < 30)) & ((data["SKINTHICKNESS"] > 2.5) & (data["SKINTHICKNESS"] <= 3.25)), "NEW_BMI_SKIN_THIC_NOM"] = "OverweightThick"
+data.loc[(data["BMI"] > 30) & ((data["SKINTHICKNESS"] > 1.25) & (data["SKINTHICKNESS"] <= 2)), "NEW_BMI_SKIN_THIC_NOM"] = "ObeseThin"
+data.loc[(data["BMI"] > 30) & ((data["SKINTHICKNESS"] > 2) & (data["SKINTHICKNESS"] <= 2.5)), "NEW_BMI_SKIN_THIC_NOM"] = "ObeseHealthy"
+data.loc[(data["BMI"] > 30) & ((data["SKINTHICKNESS"] > 2.5) & (data["SKINTHICKNESS"] <= 3.25)), "NEW_BMI_SKIN_THIC_NOM"] = "ObeseThick"
+
+# Deri Kalinligi ve Insulin degerlerini bir arada dusunerek kategorik degisken olusturma
+data.loc[((data["SKINTHICKNESS"] > 1.25) & (data["SKINTHICKNESS"] <= 2)) & ((data["INSULIN"] >= 16) & (data["INSULIN"] <=160)), "NEW_BMI_SKIN_THIC_NOM"] = "ThinNormal"
+data.loc[((data["SKINTHICKNESS"] > 1.25) & (data["SKINTHICKNESS"] <= 2)) & (data["INSULIN"] >=160), "NEW_BMI_SKIN_THIC_NOM"] = "ThinAbNormal"
+data.loc[((data["SKINTHICKNESS"] > 2) & (data["SKINTHICKNESS"] <= 2.5)) & ((data["INSULIN"] >= 16) & (data["INSULIN"] <=160)), "NEW_BMI_SKIN_THIC_NOM"] = "HealthyNormal"
+data.loc[((data["SKINTHICKNESS"] > 2) & (data["SKINTHICKNESS"] <= 2.5)) & (data["INSULIN"] >=160), "NEW_BMI_SKIN_THIC_NOM"] = "HealthyAbNormal"
+data.loc[((data["SKINTHICKNESS"] > 2.5) & (data["SKINTHICKNESS"] <= 3)) & ((data["INSULIN"] >= 16) & (data["INSULIN"] <=160)), "NEW_BMI_SKIN_THIC_NOM"] = "ThickNormal"
+data.loc[((data["SKINTHICKNESS"] > 2.5) & (data["SKINTHICKNESS"] <= 3)) & (data["INSULIN"] >=160), "NEW_BMI_SKIN_THIC_NOM"] = "ThickAbNormal"
+
+# Insulin
+data['NEW_INSULIN'] = data['INSULIN'].apply(lambda x: "Normal" if 16 <= x <= 166 else "Abnormal")
+
 
 cat_cols, num_cols, cat_but_car=grab_col_names(data,cat_th=5, car_th=15)
 cat_cols = [col for col in cat_cols if "OUTCOME" not in col]
@@ -322,7 +426,13 @@ y = data["OUTCOME"]
 X = data.drop(["OUTCOME"], axis=1)
 check_df(data)
 
-base_models(X, y)
+model_results = base_models(X, y)
+
+# Her bir performans metriği için grafik oluşturma
+metrics = list(model_results[list(model_results.keys())[0]].keys())
+
+for metric in metrics:
+    plot_metric(metric, model_results)
 
 #Random Forest Model
 rf_model = RandomForestClassifier(random_state=46)
@@ -351,3 +461,4 @@ final_rf_model.predict(random_user)
 data.loc[195]
 
 plot_importance(final_rf_model, X, save=True)
+
