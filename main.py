@@ -3,6 +3,7 @@ import pandas as pd
 import seaborn as sns
 import numpy as np
 from matplotlib import pyplot as plt
+from sklearn.metrics import confusion_matrix
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier, AdaBoostClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_predict, GridSearchCV, cross_val_score, train_test_split
@@ -28,7 +29,7 @@ data = pd.read_csv("database/diabetes.csv")
 # Kolon isimlerini büyültüyorum ki sorgulama vs yaparken yazmak, okumak kolay olsun.
 data.columns = [col.upper() for col in data.columns]
 data.head()
-
+"""
 def check_df(dataframe, head=8):
   print("##### Shape #####") #kac kolon kac satir
   print(dataframe.shape)
@@ -45,9 +46,9 @@ def check_df(dataframe, head=8):
   # Mesela glucose degeri min olarak 0 gosterilmis, glucose 0 olamaz. Demek ki null kısımlara 0 girilmis.
   print(dataframe.describe([0,0.05, 0.50, 0.95, 0.99, 1]).T)
 
-
+"""
 #check_df(data)
-
+"""
 #Outlier değerleri grafik üzerinde görebilmek için
 f, ax = plt.subplots(figsize=(20,20)) #f->figure and ax->axis
 fig = sns.boxplot(data=data, orient="h") #horizontally (grafiği yatayda alabilmek için)
@@ -61,10 +62,22 @@ fig = sns.boxplot(data=data, orient="h") #horizontally (grafiği yatayda alabilm
 #Yaş ile deri kalınlığı arasında da negatif korelasyon bulunmakta. -0.11
 sns.clustermap(data.corr(), annot = True, fmt = ".2f")
 #plt.show()
+"""
+#CONFUSION MATRİX İÇİN
+def plot_confusion_matrix(y_true, y_pred, labels):
+    cm = confusion_matrix(y_true, y_pred, labels=labels)
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=labels, yticklabels=labels)
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.title('Confusion Matrix')
+    plt.show()
+
+
 
 #F1, ROC_AUC, ACCURACY VB GİBİ DEĞERLERİN GRAFİKLEŞTİRİLMESİ
 
-def plot_metric(metric, model_results):
+def plot_metric(metric, model_results, title):
     models = list(model_results.keys())
     values = [model_results[model][metric] for model in models]
 
@@ -72,7 +85,7 @@ def plot_metric(metric, model_results):
     plt.bar(models, values)
     plt.xlabel('Models')
     plt.ylabel(metric)
-    plt.title(f'{metric} Comparison Among Models')
+    plt.title(f'{metric} Comparison Among Models {title}')
     plt.ylim(0, 1)  # Performans metrikleri genellikle 0 ile 1 arasında olur
     plt.show()
 
@@ -87,8 +100,8 @@ def base_models(X, y):
                    ('Adaboost', AdaBoostClassifier()),
                    ('GBM', GradientBoostingClassifier()),
                    ('XGBoost', XGBClassifier(use_label_encoder=False, eval_metric='logloss')),
-                   #('LightGBM', LGBMClassifier()),
-                   # ('CatBoost', CatBoostClassifier(verbose=False))
+                   ('LightGBM', LGBMClassifier()),
+                   ('CatBoost', CatBoostClassifier(verbose=False))
                    ]
     results = {}  # Performans ölçütlerini saklamak için bir sözlük
 
@@ -105,25 +118,17 @@ def base_models(X, y):
 
     return results
 
-def plot_roc_curves(models, X_test, y_test):
-    plt.figure(figsize=(10, 6))
-    for name, model in models.items():
-        plot_roc_curve(model, X_test, y_test, name=name)
-
-    plt.title('Receiver Operating Characteristic (ROC) Curves')
-    plt.legend()
-    plt.show()
-
 y = data["OUTCOME"]
 X = data.drop("OUTCOME", axis=1)
 
 model_results = base_models(X,y)
-
 # Her bir performans metriği için grafik oluşturma
 metrics = list(model_results[list(model_results.keys())[0]].keys())
 
 for metric in metrics:
-    plot_metric(metric, model_results)
+    plot_metric(metric, model_results, title="base model için")
+
+
 def plot_importance(model, features, num=len(X), save=True):
     feature_imp = pd.DataFrame({'Value': model.feature_importances_, 'Feature': features.columns})
     plt.figure(figsize=(10, 10))
@@ -289,17 +294,17 @@ def replace_with_thresholds(dataframe, variable):
 for col in num_cols:
   print(replace_with_thresholds(data, col))
 
-
+"""
 plt.hist(data, bins=10, edgecolor='black')  # 'bins' parametresiyle aralık sayısını belirleyebilirsiniz
 plt.xlabel('Değer Aralığı')
 plt.ylabel('Frekans')
 plt.title('Veri Seti Histogramı')
 plt.show()
-
+"""
 #data["AGE"].min()
 
 #FEATURE ENGINEERING
-"""
+
 # Yaş değişkenini kategorilere ayırıp yeni yaş değişkeni oluşturulması
 data.loc[(data['AGE'] < 35), "NEW_AGE_CAT"] = 'young'
 data.loc[(data['AGE'] >= 35) & (data['AGE'] <= 55), "NEW_AGE_CAT"] = 'middleage'
@@ -401,7 +406,7 @@ data.loc[((data["SKINTHICKNESS"] > 2.5) & (data["SKINTHICKNESS"] <= 3)) & (data[
 
 # Insulin
 data['NEW_INSULIN'] = data['INSULIN'].apply(lambda x: "Normal" if 16 <= x <= 166 else "Abnormal")
-
+"""
 
 cat_cols, num_cols, cat_but_car=grab_col_names(data,cat_th=5, car_th=15)
 cat_cols = [col for col in cat_cols if "OUTCOME" not in col]
@@ -424,15 +429,24 @@ data[num_cols] = pd.DataFrame(X_scaled, columns=data[num_cols].columns)
 #data.head()
 y = data["OUTCOME"]
 X = data.drop(["OUTCOME"], axis=1)
-check_df(data)
+#check_df(data)
 
 model_results = base_models(X, y)
+
+def plot_roc_curves(models, X_test, y_test):
+    plt.figure(figsize=(10, 6))
+    for name, model in models.items():
+        plot_roc_curve(model, X_test, y_test, name=name)
+
+    plt.title('Receiver Operating Characteristic (ROC) Curves')
+    plt.legend()
+    plt.show()
 
 # Her bir performans metriği için grafik oluşturma
 metrics = list(model_results[list(model_results.keys())[0]].keys())
 
 for metric in metrics:
-    plot_metric(metric, model_results)
+    plot_metric(metric, model_results, title="feature engineering sonrası")
 
 #Random Forest Model
 rf_model = RandomForestClassifier(random_state=46)
@@ -452,13 +466,28 @@ rf_gs_best = GridSearchCV(rf_model,
                           n_jobs=-1,
                           verbose=True).fit(X, y)
 
+
+# Eğitim ve test setlerine ayırma
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
 # En iyi parametrelerle final modeli oluşturmak için
 final_rf_model = rf_model.set_params(**rf_gs_best.best_params_).fit(X, y)
 
-random_user = X.sample(1, random_state=45)
-final_rf_model.predict(random_user)
+# Tahmin yapma
+y_pred = rf_model.predict(X_test)
 
-data.loc[195]
+# Confusion matrix oluşturma
+conf_matrix = confusion_matrix(y_test, y_pred)
+# Heatmap ile confusion matrix görselleştirme
+plt.figure(figsize=(8, 6))
+sns.heatmap(conf_matrix, annot=True, cmap='Blues', fmt='g')
+plt.xlabel('Predicted')
+plt.ylabel('Actual')
+plt.title('Confusion Matrix')
+plt.show()
 
 plot_importance(final_rf_model, X, save=True)
+
+
+
 
