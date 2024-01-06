@@ -3,7 +3,7 @@ import pandas as pd
 import seaborn as sns
 import numpy as np
 from matplotlib import pyplot as plt
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier, AdaBoostClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_predict, GridSearchCV, cross_val_score, train_test_split, cross_validate
@@ -94,7 +94,10 @@ def plot_outliers(data):
 
 
 #MODELİN DEĞİŞKENLERİNİN ÖNEM SIRALAMASI
-def plot_importance(model, features, num=len(X), save=False,name="importance.png"):
+def plot_importance(model, features, num=None, save=False, name="importance.png"):
+    if num is None:
+        num = len(features.columns)
+
     feature_imp = pd.DataFrame({'Value': model.feature_importances_, 'Feature': features.columns})
     plt.figure(figsize=(10, 10))
     sns.set(font_scale=1)
@@ -105,6 +108,7 @@ def plot_importance(model, features, num=len(X), save=False,name="importance.png
     plt.show()
     if save:
         plt.savefig(name)
+
 
 
 
@@ -286,11 +290,15 @@ def data_process(df):
 
 
 def evaluate_model(model, X, y):
-    scoring = ["accuracy", "f1", "roc_auc"]
-    cv_results = cross_validate(model, X, y, cv=5, scoring=scoring)
+    # Modeli eğit ve tahminleri al
+    predictions = model.predict(X)
 
-    mean_accuracy = cv_results['test_accuracy'].mean()
-    mean_f1 = cv_results['test_f1'].mean()
-    mean_roc_auc = cv_results['test_roc_auc'].mean()
+    # Metrikleri hesapla
+    accuracy = accuracy_score(y, predictions)
+    f1 = f1_score(y, predictions)
+    roc_auc = roc_auc_score(y, predictions)
 
-    return mean_accuracy, mean_f1, mean_roc_auc
+    # Confusion matrix'i hesapla
+    conf_matrix = confusion_matrix(y, predictions)
+
+    return accuracy, f1, roc_auc, conf_matrix

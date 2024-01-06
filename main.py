@@ -158,9 +158,10 @@ cv_results = cross_validate(rf_final, X, y, cv=10, scoring=["accuracy", "f1", "r
 cv_results['test_accuracy'].mean()#0.8906698564593303
 cv_results['test_f1'].mean()#0.8378046491808121
 cv_results['test_roc_auc'].mean()#0.9507492877492878
-
-
-
+"""
+########################################################################################################################
+#MODEL EĞİTİMİ
+########################################################################################################################
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
 # VotingClassifier oluşturma
@@ -197,9 +198,76 @@ plot_confusion_matrix(y_test,predictions_lgbm,"lgbm")
 plot_confusion_matrix(y_test,predictions_rf,"rf")
 
 #Önemli değişkenler
-plot_importance(xgboost_final,X,name="xgb_imp")
+plot_importance(xgboost_final, X,name="xgb_imp")
 plot_importance(lgbm_final,X,name="lgbm_imp")
 plot_importance(rf_final,X,name="rf_imp")
+"""
+########################################################################################################################
+#ÖNEMLİ DEĞİŞKENLERLE MODEL EĞİTİMİ
+########################################################################################################################
+
+important_features = ["INSULIN", "NEW_INSULIN_Normal", "GLUCOSE", "SKINTHICKNESS", "AGE", "BMI"]
+X_important = X[important_features]
+
+voting_clf = VotingClassifier(estimators=[('lgbm', lgbm_final), ('xgb', xgboost_final),('rf', rf_final)], voting='soft')
+
+# Modeli eğitme
+voting_clf.fit(X_important, y)
+xgboost_final.fit(X_important,y)
+lgbm_final.fit(X_important,y)
+rf_final.fit(X_important,y)
+
+# Tahmin yapma
+predictions = voting_clf.predict(X_important)
+predictions_xgb= xgboost_final.predict(X_important)
+predictions_lgbm= lgbm_final.predict(X_important)
+predictions_rf= rf_final.predict(X_important)
+
+models = [voting_clf, xgboost_final, lgbm_final, rf_final]
+model_names = ["Voting Classifier", "XGBoost", "LGBM", "Random Forest"]
+
+for model, name in zip(models, model_names):
+    accuracy, f1, roc_auc = evaluate_model(model, X, y)
+    print(f"{name} - Accuracy: {accuracy}, F1 Score: {f1}, ROC AUC: {roc_auc}")
+
+X_imp_train, X_imp_test, y_train, y_test = train_test_split(X_important, y, test_size=0.3, random_state=42)
+voting_clf = VotingClassifier(estimators=[('lgbm', lgbm_final), ('xgb', xgboost_final),('rf', rf_final)], voting='soft')
+
+# Modeli eğitme
+voting_clf.fit(X_imp_train, y_train)
+xgboost_final.fit(X_imp_train,y_train)
+lgbm_final.fit(X_imp_train,y_train)
+rf_final.fit(X_imp_train,y_train)
+
+# Tahmin yapma
+predictions = voting_clf.predict(X_imp_test)
+predictions_xgb= xgboost_final.predict(X_imp_test)
+predictions_lgbm= lgbm_final.predict(X_imp_test)
+predictions_rf= rf_final.predict(X_imp_test)
+
+#Model sonuçları
+voting_accuracy, voting_f1, voting_roc_auc = evaluate_model(voting_clf, X_important, y)
+print(f"Voting Classifier - Accuracy: {voting_accuracy}, F1 Score: {voting_f1}, ROC AUC: {voting_roc_auc}")
+
+voting_accuracy, voting_f1, voting_roc_auc = evaluate_model(xgboost_final, X_important, y)
+print(f"XGBoost - Accuracy: {voting_accuracy}, F1 Score: {voting_f1}, ROC AUC: {voting_roc_auc}")
+
+voting_accuracy, voting_f1, voting_roc_auc = evaluate_model(lgbm_final, X_important, y)
+print(f"LGBM - Accuracy: {voting_accuracy}, F1 Score: {voting_f1}, ROC AUC: {voting_roc_auc}")
+
+voting_accuracy, voting_f1, voting_roc_auc = evaluate_model(rf_final, X_important, y)
+print(f"Random Forest - Accuracy: {voting_accuracy}, F1 Score: {voting_f1}, ROC AUC: {voting_roc_auc}")
+
+# Confusion matrix oluşturma
+plot_confusion_matrix(y_test,predictions, "voting_clf")
+plot_confusion_matrix(y_test,predictions_xgb,"xgb")
+plot_confusion_matrix(y_test,predictions_lgbm,"lgbm")
+plot_confusion_matrix(y_test,predictions_rf,"rf")
+
+#Önemli değişkenler
+plot_importance(xgboost_final, X_important,name="xgb_imp")
+plot_importance(lgbm_final,X_important,name="lgbm_imp")
+plot_importance(rf_final,X_important,name="rf_imp")
 
 # Modeli kaydetme
 joblib.dump(voting_clf, 'voting_model(lgbm_xgb_rf).pkl')
