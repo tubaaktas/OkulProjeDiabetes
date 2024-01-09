@@ -219,16 +219,17 @@ rf_final.fit(X_important,y)
 
 # Tahmin yapma
 predictions = voting_clf.predict(X_important)
-predictions_xgb= xgboost_final.predict(X_important)
+predictions_xgb = xgboost_final.predict(X_important)
 predictions_lgbm= lgbm_final.predict(X_important)
-predictions_rf= rf_final.predict(X_important)
+predictions_rf = rf_final.predict(X_important)
 
 models = [voting_clf, xgboost_final, lgbm_final, rf_final]
 model_names = ["Voting Classifier", "XGBoost", "LGBM", "Random Forest"]
 
 for model, name in zip(models, model_names):
-    accuracy, f1, roc_auc = evaluate_model(model, X, y)
+    accuracy, f1, roc_auc, conf_matrix = evaluate_model(model, X_important, y)
     print(f"{name} - Accuracy: {accuracy}, F1 Score: {f1}, ROC AUC: {roc_auc}")
+
 
 X_imp_train, X_imp_test, y_train, y_test = train_test_split(X_important, y, test_size=0.3, random_state=42)
 voting_clf = VotingClassifier(estimators=[('lgbm', lgbm_final), ('xgb', xgboost_final),('rf', rf_final)], voting='soft')
@@ -246,17 +247,18 @@ predictions_lgbm= lgbm_final.predict(X_imp_test)
 predictions_rf= rf_final.predict(X_imp_test)
 
 #Model sonuçları
-voting_accuracy, voting_f1, voting_roc_auc = evaluate_model(voting_clf, X_important, y)
+voting_accuracy, voting_f1, voting_roc_auc, _ = evaluate_model(voting_clf, X_important, y)
 print(f"Voting Classifier - Accuracy: {voting_accuracy}, F1 Score: {voting_f1}, ROC AUC: {voting_roc_auc}")
 
-voting_accuracy, voting_f1, voting_roc_auc = evaluate_model(xgboost_final, X_important, y)
-print(f"XGBoost - Accuracy: {voting_accuracy}, F1 Score: {voting_f1}, ROC AUC: {voting_roc_auc}")
+xgboost_accuracy, xgboost_f1, xgboost_roc_auc, _ = evaluate_model(xgboost_final, X_important, y)
+print(f"XGBoost - Accuracy: {xgboost_accuracy}, F1 Score: {xgboost_f1}, ROC AUC: {xgboost_roc_auc}")
 
-voting_accuracy, voting_f1, voting_roc_auc = evaluate_model(lgbm_final, X_important, y)
-print(f"LGBM - Accuracy: {voting_accuracy}, F1 Score: {voting_f1}, ROC AUC: {voting_roc_auc}")
+lgbm_accuracy, lgbm_f1, lgbm_roc_auc, _ = evaluate_model(lgbm_final, X_important, y)
+print(f"LGBM - Accuracy: {lgbm_accuracy}, F1 Score: {lgbm_f1}, ROC AUC: {lgbm_roc_auc}")
 
-voting_accuracy, voting_f1, voting_roc_auc = evaluate_model(rf_final, X_important, y)
-print(f"Random Forest - Accuracy: {voting_accuracy}, F1 Score: {voting_f1}, ROC AUC: {voting_roc_auc}")
+rf_accuracy, rf_f1, rf_roc_auc, _ = evaluate_model(rf_final, X_important, y)
+print(f"Random Forest - Accuracy: {rf_accuracy}, F1 Score: {rf_f1}, ROC AUC: {rf_roc_auc}")
+
 
 # Confusion matrix oluşturma
 plot_confusion_matrix(y_test,predictions, "voting_clf")
