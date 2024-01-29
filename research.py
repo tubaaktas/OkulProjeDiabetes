@@ -110,8 +110,6 @@ def plot_importance(model, features, num=None, save=False, name="importance.png"
         plt.savefig(name)
 
 
-
-
 # BASE MODEL KURULUMU VE MODELLERİN SONUCLARI İÇİN
 def base_models_results(X, y):
     print("Base Models....")
@@ -140,7 +138,6 @@ def base_models_results(X, y):
         print("\n")
 
     return results
-
 
 
 #KATEGORİK KARDİNAL VE NÜMERİK KOLON AYIRMA
@@ -203,14 +200,14 @@ def fill_zeros_with_nan(data, nan_col):
 
 #BOŞ DEĞERLERİ DOLDURMA
 def fill_missing_values(data):
-    nan_col = ['GLUCOSE', 'BLOODPRESSURE', 'SKINTHICKNESS', 'INSULIN', 'BMI']
+    nan_col = ['Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI']
     data = fill_zeros_with_nan(data, nan_col)
 
-    median_value_outcome_1 = data.loc[data['OUTCOME'] == 1].median()
-    median_value_outcome_0 = data.loc[data['OUTCOME'] == 0].median()
+    mean_value_outcome_1 = data.loc[data['Outcome'] == 1].mean()
+    mean_value_outcome_0 = data.loc[data['Outcome'] == 0].mean()
 
-    data.loc[data['OUTCOME'] == 1] = data.loc[data['OUTCOME'] == 1].fillna(median_value_outcome_1)
-    data.loc[data['OUTCOME'] == 0] = data.loc[data['OUTCOME'] == 0].fillna(median_value_outcome_0)
+    data.loc[data['Outcome'] == 1] = data.loc[data['Outcome'] == 1].fillna(mean_value_outcome_1)
+    data.loc[data['Outcome'] == 0] = data.loc[data['Outcome'] == 0].fillna(mean_value_outcome_0)
 
     return data
 
@@ -256,37 +253,37 @@ def one_hot_encoder(dataframe, categorical_cols, drop_first=False):
 #FEATURE ENGINEERING
 def data_process(df):
     # Yaş değişkenini kategorilere ayırıp yeni yaş değişkeni oluşturulması
-    df.loc[(df['AGE'] < 35), "NEW_AGE_CAT"] = 'young'
-    df.loc[(df['AGE'] >= 35) & (df['AGE'] <= 55), "NEW_AGE_CAT"] = 'middleage'
-    df.loc[(df['AGE'] > 55), "NEW_AGE_CAT"] = 'old'
+    df.loc[(df['Age'] < 35), "NEW_AGE_CAT"] = 'young'
+    df.loc[(df['Age'] >= 35) & (df['Age'] <= 55), "NEW_AGE_CAT"] = 'middleage'
+    df.loc[(df['Age'] > 55), "NEW_AGE_CAT"] = 'old'
 
     # BMI 18,5 aşağısı underweight, 18.5 ile 24.9 arası normal, 24.9 ile 29.9 arası Overweight ve 30 üstü obez
     df['NEW_BMI'] = pd.cut(x=df['BMI'], bins=[0, 18.5, 24.9, 29.9, 100],
                              labels=["Underweight", "Healthy", "Overweight", "Obese"])
 
     # Glukoz degerini kategorik değişkene çevirme
-    df["NEW_GLUCOSE"] = pd.cut(x=df["GLUCOSE"], bins=[0, 140, 200, 300],
+    df["NEW_GLUCOSE"] = pd.cut(x=df["Glucose"], bins=[0, 140, 200, 300],
                                  labels=["Normal", "Prediabetes", "Diabetes"])
 
     # BloodPressure
-    df['NEW_BLOODPRESSURE'] = pd.cut(x=df['BLOODPRESSURE'], bins=[0, 79, 89, 123],
+    df['NEW_BLOODPRESSURE'] = pd.cut(x=df['BloodPressure'], bins=[0, 79, 89, 123],
                                        labels=["normal", "hs1", "hs2"])
 
     # Insulin
-    df['NEW_INSULIN'] = df['INSULIN'].apply(lambda x: "Normal" if 16 <= x <= 166 else "Abnormal")
-
-
+    df['NEW_INSULIN'] = df['Insulin'].apply(lambda x: "Normal" if 16 <= x <= 166 else "Abnormal")
     cat_cols, num_cols, cat_but_car = grab_col_names(df,cat_th=5, car_th=15)
-    cat_cols = [col for col in cat_cols if "OUTCOME" not in col]
+    cat_cols = [col for col in cat_cols if "Outcome" not in col]
     data = one_hot_encoder(df, cat_cols, drop_first=True)
     cat_cols, num_cols, cat_but_car = grab_col_names(data,cat_th=5, car_th=15)
-    replace_with_thresholds(data, "INSULIN")
+    replace_with_thresholds(data, "Insulin")
     X_scaled = StandardScaler().fit_transform(data[num_cols])
-    data[num_cols] = pd.DataFrame(X_scaled, columns=data[num_cols].columns)
-    y = data["OUTCOME"]
-    X = data.drop(["OUTCOME"], axis=1)
+    X_scaled2 = StandardScaler().fit(data[num_cols])
+    import joblib
+    joblib.dump(X_scaled,"standart_scaler.pkl")
+    y = data["Outcome"]
+    X = data.drop(["Outcome"], axis=1)
 
-    return X, y
+    return X, y, data[num_cols]
 
 
 def evaluate_model(model, X, y):
